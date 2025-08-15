@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# shellcheck disable=all
+
+# Direktori log
+LOG_DIR="$HOME/logs/Timeshift"
+mkdir -p "$LOG_DIR"
+
+
+# Membuat nama log
+NUM=$(ls "$LOG_DIR" 2>/dev/null | grep -Eo '[0-9]+' | sort -n | tail -1)
+NUM=${NUM:-0}
+NUM=$((NUM + 1))
+
+# Tempat penyimpanan log
+LOG_FILE="$LOG_DIR/log_$NUM.txt"
+
+# Fungsi untuk log tanpa mengganggu read
+log() {
+    echo "$@" | tee -a "$LOG_FILE"
+}
+
+# Meminta user memasukan nama snapshot
+read -rp "Buat nama snapshot: " Nama
+
+# Daftar Tag yang tersedia
+echo "B = Boot"
+echo "D = Daily"
+echo "H = Hours"
+echo "W = Weekly"
+echo "M = Monthly"
+echo "O = Ondemand cukup tekan enter"
+
+# Meminta user memasukan tags
+read -rp "Masukan tags yang ingin dibuat: " Tag 
+Tag=${Tag:-""}
+
+# Log input user
+log "Snapshot: $Nama, Tag: $Tag"
+
+# Membuat log backup
+log "Mulai backup..."
+
+# Eksekusi backup 
+sudo timeshift --create --comments "$Nama" --tags "$Tag" | tee -a "$LOG_FILE"
+
+# Log selesai 
+log "Backup selesai"
+
+# Memberitahu user apakah ingin melihat daftar backup  
+read -rp "Apakah anda ingin melihat daftar backup anda? (Y/N): " List
+List=$(echo "$List" | xargs)
+
+# Triger jawaban user bisa [Y/y/Yes/YES/yes/yEs/YeS/yeS/yeS]
+if [[ "$List" =~ ^([Yy]|[Yy][Ee][Ss])$ ]]; then
+    sudo timeshift --list | tee -a "$LOG_FILE"
+else
+
+# Memberitahu user jika ingin cek daftar backup manual 
+    log "Jika ingin cek manual cukup jalankan: sudo timeshift --list"
+fi
+# Memberitahu user tempat penyimpanan log
+log "$LOG_FILE disimpan di $LOG_DIR"
+
+# Notifikasi backup selesai 
+notify-send "Backup selesai" "Snapshot $Nama berhasil dibuat"
+
+# Scripts by Asep5K
