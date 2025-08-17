@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+
+#
+# 📌 Auto Download music & video yt
+#    Bisa Linux & macOS
+#
+# Usage:
+#   ytdownload <url>
+#
+
+set -euo pipefail
+IFS=$'\n\t'
+
+### === Variabel Umum === ###
+SCRIPT_NAME=$(basename "$0")
+VERSION="1.0.0"
+
+### === Fungsi Bantuan === ###
+function usage() {
+    cat <<EOF
+Usage: $SCRIPT_NAME <url> 
+
+Opsi:
+  -h, --help     Tampilkan bantuan
+  -v, --version  Tampilkan versi script
+
+Note: Gratis & anti spy 👀
+      btw i use Arch  🤓🤓🤓🤓
+
+
+Contoh:
+  $SCRIPT_NAME <url youtube> mp3
+  $SCRIPT_NAME <url youtube> bestvideo
+EOF
+    exit 0
+}
+
+### === Argumen Parsing === ###
+if [[ $# -eq 0 ]]; then
+    usage
+fi
+
+case "$1" in
+    -h|--help)
+        usage
+        ;;
+    -v|--version)
+        echo "$SCRIPT_NAME v$VERSION"
+        exit 0
+        ;;
+esac
+
+# Warna
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+RESET="\e[0m"
+
+url="$1"
+perintah="${2:-s}"
+path="${3:-}"
+command -v yt-dlp >/dev/null 2>&1 || { echo -e "${RED}❌ yt-dlp tidak ditemukan! Install dulu.${RESET}"; exit 1; }
+
+# Cek apakah sesuai pola URL YouTube dan Looping sampai user memasukan url yang benar
+if [[ "$1" =~ ^https?://(www\.)?(youtube\.com|youtu\.be)/ ]]; then
+        echo -e "${GREEN}✅ URL valid, lanjut download...${RESET}"   
+    else 
+        echo -e "${RED}🚫 Hanya URL YouTube yang diterima!${RESET}"
+        exit 1
+fi
+
+# Meminta user memsaukan path penyimpanan
+read -rp "Masukkan folder output (kosongkan untuk folder ini): " outdir
+outdir=${outdir:-.}   # kalau kosong → pakai folder saat ini
+mkdir -p "$outdir" || { echo -e "${RED}Gagal buat folder output!${RESET}"; exit 1; }
+
+
+# Fungsi
+mp3() {
+    echo "🎵 Sedang download audio (mp3)..."
+    yt-dlp -x --audio-format mp3 -o "$outdir/%(title)s.%(ext)s" "$url"
+    exit 0   # biar stop total setelah fungsi ini dipanggil
+}
+bestvideo() {
+    echo "mendownload video dengan resolusi terbaik..."
+    yt-dlp -f bestvideo+bestaudio/best --merge-output-format mp4 -o "$outdir/%(title)s.%(ext)s" "$url"
+    exit 0
+}
+
+# Triger sesuai pilihan user
+case "$perintah" in
+    mp3)
+       mp3
+        ;;
+    bestvideo)
+       bestvideo
+        ;;
+    *)
+        # Mengambil daftar resolusi yang tersedia
+        echo -e "${YELLOW}Ambil daftar resolusi...${RESET}"
+        yt-dlp -F "$url"
+
+        echo -e "jika ingin mp3 ketik mp3"
+        echo -e "jika ingin kualitas video terbaik ketik bestvideo"
+        read -rp "pilih kode format: " pilihan
+        pilihan=${pilihan:-exit0}
+
+        case "$pilihan" in
+        mp3) mp3 ;;
+        bestvideo) bestvideo ;;
+        *)
+            yt-dlp -f "$pilihan+bestaudio/best" --merge-output-format mp4 -o "$outdir/%(title)s.%(ext)s" "$url"
+        ;;
+    esac
+esac
+
+notify-send -t 3000 "ytdownload" "Done file saved to $outdir"
