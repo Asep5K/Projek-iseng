@@ -1,128 +1,72 @@
 #!/usr/bin/env bash
 
-#
-# 📌 Auto Download YouTube music & video
-#    Works on Linux (also Android via Termux)
-#
-# Usage:
-#   ytdownload <url>
-#
+# Debug mode
+# set -x
 
-set -euo pipefail
-IFS=$'\n\t'
+# Tangkap Ctrl+C
+trap 'echo -e "\nCancelled by user."; exit 0' SIGINT
 
-### === Variabel Umum === ###
-SCRIPT_NAME=$(basename "$0")
-VERSION="1.0.0"
-
-### === Fungsi Bantuan === ###
-function usage() {
-    cat <<EOF
-Usage: $SCRIPT_NAME <url> mp3/bestvideo
-
-Options:
-  -h, --help     Show this help message
-  -v, --version  Show script version
-
-Note: Free & privacy-friendly 👀
-
-Examples:
-  $SCRIPT_NAME <url youtube> mp3
-  $SCRIPT_NAME <url youtube> bestvideo
-EOF
-    exit 0
-}
-
-### === Argumen Parsing === ###
-if [[ $# -eq 0 ]]; then
-    usage
-fi
-
-case "$1" in
-    -h|--help)
-        usage
-        ;;
-    -v|--version)
-        echo "$SCRIPT_NAME v$VERSION"
-        exit 0
-        ;;
-esac
-
-# Warna
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-RESET="\e[0m"
+# Cek yt-dlp
+command -v yt-dlp >/dev/null 2>&1 || { echo "❌ yt-dlp not found! Please install first."; exit 1; }
 
 url="$1"
-perintah="${2:-s}"
-path="${3:-}"
-command -v yt-dlp >/dev/null 2>&1 || { echo -e "${RED}❌ yt-dlp not found! Please install first.${RESET}"; exit 1; }
+perintah="${2:-ask}"
 
-# Cek apakah sesuai pola URL YouTube dan Looping sampai user memasukan url yang benar
-if [[ "$1" =~ ^https?://(www\.)?(youtube\.com|youtu\.be)/ ]]; then
-        echo -e "${GREEN}✅ Valid URL, starting download...${RESET}"   
-    else 
-        echo -e "${RED}🚫 Only YouTube URLs are accepted!${RESET}"
-        exit 1
-fi
-
-# Meminta user memsaukan path penyimpanan
-read -rp "Enter output folder (leave empty for Downloads): " outdir
-outdir=${outdir:-"$HOME/Downloads"}   # kalau kosong → pakai Downloads
-mkdir -p "$outdir" || { echo -e "${RED}Failed to create output folder!${RESET}"; exit 1; }
-
-# Fungsi
+# === Fungsi === #
 mp3() {
+    outdir="$HOME/Music"
+    mkdir -p "$outdir"
     echo "🎵 Downloading audio (mp3)..."
     yt-dlp -x --audio-format mp3 -o "$outdir/%(title)s.%(ext)s" "$url"
-    exit 0   # biar stop total setelah fungsi ini dipanggil
 }
 bestvideo() {
+    outdir="$HOME/Videos"
+    mkdir -p "$outdir"
     echo "🎬 Downloading video at best quality..."
     yt-dlp -f bestvideo+bestaudio/best --merge-output-format mp4 -o "$outdir/%(title)s.%(ext)s" "$url"
-    exit 0
 }
+ask() {
+    read -rp "Enter output folder (default: ~/Downloads): " outdir
+    outdir="${outdir:-$HOME/Downloads}"
+    mkdir -p "$outdir"
 
-# Triger sesuai pilihan user
-case "$perintah" in
-    mp3) 
-        mp3 
-        ;;
-    bestvideo) 
-        bestvideo 
-        ;;
-    ask|s) 
-    
-        # Mengambil daftar resolusi yang tersedia
-        echo -e "${YELLOW}Fetching available formats...${RESET}"
-        yt-dlp -F "$url"
+    echo "📡 Fetching available formats..."
+    yt-dlp -F "$url"
 
-        # Menampilkan piliham mp3 / bestvideo 
-        echo -e "Type 'mp3' to download audio"
-        echo -e "Type 'bestvideo' to download best quality video"
-
-      # Tangkap Ctrl+C
-        trap 'echo -e "\nCancelled by user."; exit 0' SIGINT
-
-        # Loop sampai user memasukkan input valid
     while true; do
         read -rp "Choose format (mp3/bestvideo/custom code): " pilihan
-        if [[ -n "$pilihan" ]]; then
-            break
+        if [[ -z "$pilihan" ]]; then
+            echo "❌ Please make your choice!"
+            continue
         fi
-    done
 
-        # Proses pilihan
         case "$pilihan" in
-        mp3) mp3 ;;
-        bestvideo) bestvideo ;;
-        *) yt-dlp -f "$pilihan+bestaudio/best" --merge-output-format mp4 -o "$outdir/%(title)s.%(ext)s" "$url" ;;
-    esac 
-    ;;
-    *) echo -e "${RED}Unrecognized option!${RESET}"; usage ;;
+            mp3) mp3 ;;
+            bestvideo) bestvideo ;;
+            *) yt-dlp -f "$pilihan+bestaudio/best" --merge-output-format mp4 \
+                   -o "$outdir/%(title)s.%(ext)s" "$url" ;;
+        esac
+        break
+    done
+}
+
+# Cek URL valid
+if [[ ! "$url" =~ ^https?://(www\.)?(youtube\.com|youtu\.be)/ ]]; then
+    echo "🚫 Only YouTube URLs are accepted!"
+    exit 1
+fi
+
+# Trigger sesuai pilihan user
+case "$perintah" in
+    mp3) mp3 ;;
+    bestvideo) bestvideo ;;
+    ask|s) ask ;;
+    *) echo "❌ Unrecognized option!"; exit 1 ;;
 esac
 
+# Notifikasi jika selesai mendownload
 if command -v notify-send >/dev/null 2>&1; then
-    notify-send -t 3000 "ytdownload" "Done file saved to $outdir"
+    notify-send -t 3000 "ytdownload" "Done! Saved to $outdir"
 fi
+
+echo "✅ Done! Saved to: $outdir"
